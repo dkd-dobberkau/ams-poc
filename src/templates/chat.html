@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Agent Memory System{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+    <!-- Conversation History Sidebar (left) -->
+    <aside class="conversation-sidebar">
+        <div class="sidebar-header">
+            <h3>Conversations</h3>
+            <form hx-post="/ui/conversations/new" hx-swap="none">
+                <input type="hidden" name="user_id" value="{{ user_id }}">
+                <button type="submit" class="btn-new-chat" title="New Chat">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="20" height="20">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+        <nav class="conversation-list">
+            {% if conversations %}
+                {% for conv in conversations %}
+                <a href="/ui/?user_id={{ user_id }}&conversation_id={{ conv.id }}"
+                   class="conversation-item {% if conv.is_active %}active{% endif %}">
+                    <span class="conversation-title">{{ conv.title }}</span>
+                    <button class="btn-delete-conv"
+                            hx-delete="/ui/conversations/{{ conv.id }}?user_id={{ user_id }}"
+                            hx-swap="none"
+                            hx-confirm="Delete this conversation?"
+                            onclick="event.stopPropagation(); event.preventDefault();">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="14" height="14">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </a>
+                {% endfor %}
+            {% else %}
+                <p class="no-conversations">No conversations yet. Start chatting!</p>
+            {% endif %}
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-select">
+                <label for="user-id">User:</label>
+                <input type="text" id="user-id" name="user_id" value="{{ user_id }}"
+                       placeholder="Enter user ID" class="input-field input-small">
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="chat-main-area">
+        <div class="chat-header">
+            <h1>Chat with Memory</h1>
+            <div class="header-controls">
+                <button class="btn-clear"
+                        hx-delete="/ui/chat/{{ user_id }}"
+                        hx-swap="none"
+                        hx-confirm="Delete ALL conversations?">
+                    Clear All
+                </button>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+            {% if messages %}
+                {% for msg in messages %}
+                <div class="message {{ msg.role }}">
+                    <div class="message-content">{{ msg.content }}</div>
+                    {% if msg.role == 'assistant' and msg.memories_used %}
+                    <div class="message-memories">
+                        <details>
+                            <summary>Used {{ msg.memories_used|length }} memories</summary>
+                            <ul class="memory-list-small">
+                                {% for mem in msg.memories_used %}
+                                <li>
+                                    <span class="memory-type {{ mem.memory_type }}">{{ mem.memory_type }}</span>
+                                    {{ mem.content[:100] }}{% if mem.content|length > 100 %}...{% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="welcome-message">
+                    <p>Start a conversation. Your memories will be stored and recalled automatically.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <form class="chat-input-form"
+              hx-post="/ui/chat/send"
+              hx-target="#chat-messages"
+              hx-swap="beforeend"
+              hx-on::after-request="this.reset(); scrollToBottom(); removeWelcome(); updateConversationId(event);">
+            <input type="hidden" name="user_id" id="form-user-id" value="{{ user_id }}">
+            <input type="hidden" name="conversation_id" id="form-conversation-id" value="{{ conversation_id or '' }}">
+            <div class="input-group">
+                <textarea name="message"
+                          placeholder="Type your message..."
+                          class="chat-input"
+                          rows="2"
+                          required></textarea>
+                <button type="submit" class="send-button">
+                    <span class="send-text">Send</span>
+                    <span class="spinner"></span>
+                </button>
+            </div>
+            <div class="chat-options">
+                <label>
+                    <input type="checkbox" name="use_memory" value="true" checked>
+                    Use memory
+                </label>
+            </div>
+        </form>
+    </main>
+
+    <!-- Memories Sidebar (right) -->
+    <aside class="memories-sidebar" id="memories-sidebar">
+        <h3>Recent Memories</h3>
+        <div id="recalled-memories">
+            {% if memories %}
+            <ul class="recalled-list">
+                {% for mem in memories %}
+                <li class="recalled-item">
+                    <span class="memory-type {{ mem.memory_type }}">{{ mem.memory_type }}</span>
+                    <span class="memory-content">{{ mem.content[:60] }}{% if mem.content|length > 60 %}...{% endif %}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="no-memories">No memories stored yet.</p>
+            {% endif %}
+        </div>
+    </aside>
+</div>
+
+<script>
+    // Sync user ID to form
+    document.getElementById('user-id').addEventListener('change', function() {
+        document.getElementById('form-user-id').value = this.value;
+        // Reload page with new user
+        window.location.href = '/ui/?user_id=' + encodeURIComponent(this.value);
+    });
+
+    function scrollToBottom() {
+        const container = document.getElementById('chat-messages');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function removeWelcome() {
+        const welcome = document.querySelector('.welcome-message');
+        if (welcome) welcome.remove();
+    }
+
+    function updateConversationId(event) {
+        // If response includes a new conversation_id, update the form
+        const detail = event.detail;
+        if (detail && detail.xhr && detail.xhr.response) {
+            const match = detail.xhr.response.match(/data-conversation-id="([^"]+)"/);
+            if (match) {
+                document.getElementById('form-conversation-id').value = match[1];
+            }
+        }
+    }
+
+    // Scroll to bottom on page load if there are messages
+    document.addEventListener('DOMContentLoaded', function() {
+        scrollToBottom();
+    });
+
+    // Update memories sidebar after each response
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === 'chat-messages') {
+            scrollToBottom();
+            // Fetch updated memories
+            const userId = document.getElementById('user-id').value;
+            if (userId) {
+                htmx.ajax('GET', '/ui/partials/recalled-memories?user_id=' + userId, '#recalled-memories');
+            }
+        }
+    });
+</script>
+{% endblock %}

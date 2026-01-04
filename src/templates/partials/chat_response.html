@@ -1,0 +1,30 @@
+<div class="message user">
+    <div class="message-content">{{ user_message }}</div>
+</div>
+<div class="message assistant">
+    <div class="message-content">{{ response }}</div>
+    {% if memories_used %}
+    <div class="message-memories">
+        <details>
+            <summary>Used {{ memories_used|length }} memories</summary>
+            <ul class="memory-list-small">
+                {% for mem in memories_used %}
+                <li>
+                    <span class="memory-type {{ mem.memory_type }}">{{ mem.memory_type }}</span>
+                    {{ mem.content[:100] }}{% if mem.content|length > 100 %}...{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </details>
+    </div>
+    {% endif %}
+    {% if confidence_updates %}
+    <div class="message-updates">
+        {% for update in confidence_updates %}
+        <span class="confidence-badge {{ update.evidence_type }}">
+            {{ update.evidence_type }}: {{ "%.0f"|format(update.old_confidence * 100) }}% → {{ "%.0f"|format(update.new_confidence * 100) }}%
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

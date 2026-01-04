@@ -1,0 +1,17 @@
+{% if memories %}
+<ul class="recalled-list">
+    {% for mem in memories %}
+    <li class="recalled-item">
+        <span class="memory-type {{ mem.memory_type }}">{{ mem.memory_type }}</span>
+        <span class="memory-content">{{ mem.content[:80] }}{% if mem.content|length > 80 %}...{% endif %}</span>
+        {% if mem.memory_type == 'opinion' %}
+        <span class="confidence-indicator" style="--confidence: {{ mem.confidence }}">
+            {{ "%.0f"|format(mem.confidence * 100) }}%
+        </span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="no-memories">No memories stored yet.</p>
+{% endif %}

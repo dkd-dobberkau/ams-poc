@@ -75,6 +75,45 @@ FROM memories
 WHERE memory_type = 'opinion'
 ORDER BY updated_at DESC;
 
+-- Conversations table for grouping chat messages
+CREATE TABLE IF NOT EXISTS conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(255) NOT NULL,
+    title VARCHAR(255),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for fetching user's conversations
+CREATE INDEX IF NOT EXISTS idx_conversations_user
+ON conversations(user_id, updated_at DESC);
+
+-- Trigger to auto-update conversations.updated_at
+DROP TRIGGER IF EXISTS update_conversations_updated_at ON conversations;
+CREATE TRIGGER update_conversations_updated_at
+    BEFORE UPDATE ON conversations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Chat messages table for conversation history
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    memories_used JSONB DEFAULT '[]',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for fetching conversation messages
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation
+ON chat_messages(conversation_id, created_at ASC);
+
+-- Index for fetching user's chat history
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user
+ON chat_messages(user_id, created_at DESC);
+
 -- Grant permissions (adjust role name as needed)
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ams_user;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ams_user;

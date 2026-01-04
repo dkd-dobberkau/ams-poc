@@ -1,0 +1,52 @@
+{% if memories %}
+<table class="memory-table">
+    <thead>
+        <tr>
+            <th>Type</th>
+            <th>Content</th>
+            <th>Confidence</th>
+            <th>Evidence</th>
+            <th>Updated</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for mem in memories %}
+        <tr class="memory-row" id="memory-{{ mem.id }}">
+            <td>
+                <span class="memory-type {{ mem.memory_type }}">{{ mem.memory_type }}</span>
+            </td>
+            <td class="memory-content-cell">
+                {{ mem.content }}
+            </td>
+            <td>
+                {% if mem.confidence is not none %}
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: {{ mem.confidence * 100 }}%"></div>
+                    <span class="confidence-text">{{ "%.0f"|format(mem.confidence * 100) }}%</span>
+                </div>
+                {% else %}
+                <span class="confidence-na">-</span>
+                {% endif %}
+            </td>
+            <td class="evidence-count">{{ mem.evidence_count }}</td>
+            <td class="updated-at">{{ mem.updated_at.strftime('%Y-%m-%d %H:%M') if mem.updated_at else '-' }}</td>
+            <td>
+                <button class="btn-delete"
+                        hx-delete="/ui/memories/{{ mem.user_id }}/{{ mem.id }}"
+                        hx-target="#memory-{{ mem.id }}"
+                        hx-swap="outerHTML"
+                        hx-confirm="Delete this memory?">
+                    Delete
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="no-memories-card">
+    <p>No memories found.</p>
+    <p>Start a conversation to create memories.</p>
+</div>
+{% endif %}

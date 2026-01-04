@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Memories - Agent Memory System{% endblock %}
+
+{% block content %}
+<div class="memories-container">
+    <div class="memories-header">
+        <h1>Memory Store</h1>
+        <div class="user-select">
+            <label for="user-id">User ID:</label>
+            <input type="text" id="user-id" name="user_id" value="{{ user_id }}"
+                   placeholder="Enter user ID" class="input-field"
+                   hx-get="/ui/partials/memory-list"
+                   hx-trigger="input changed delay:500ms"
+                   hx-target="#memory-list"
+                   hx-include="[name='memory_type']">
+        </div>
+        <div class="filter-select">
+            <label for="memory-type">Filter:</label>
+            <select id="memory-type" name="memory_type" class="input-field"
+                    hx-get="/ui/partials/memory-list"
+                    hx-trigger="change"
+                    hx-target="#memory-list"
+                    hx-include="[name='user_id']">
+                <option value="">All types</option>
+                <option value="fact">Facts</option>
+                <option value="opinion">Opinions</option>
+                <option value="experience">Experiences</option>
+                <option value="observation">Observations</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Add Memory Form -->
+    <div class="add-memory-card">
+        <h3>Memory hinzufügen</h3>
+        <form class="add-memory-form"
+              hx-post="/ui/memories/add"
+              hx-target="#memory-list"
+              hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset();">
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="add-memory-type">Typ:</label>
+                    <select id="add-memory-type" name="memory_type" class="input-field" required>
+                        <option value="fact">Fact</option>
+                        <option value="opinion">Opinion</option>
+                        <option value="experience">Experience</option>
+                        <option value="observation">Observation</option>
+                    </select>
+                </div>
+                <div class="form-group" id="confidence-group">
+                    <label for="add-confidence">Konfidenz:</label>
+                    <input type="range" id="add-confidence" name="confidence"
+                           min="0" max="100" value="70" class="confidence-slider"
+                           oninput="document.getElementById('confidence-value').textContent = this.value + '%'">
+                    <span id="confidence-value">70%</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="add-content">Inhalt:</label>
+                <textarea id="add-content" name="content" class="input-field" rows="2"
+                          placeholder="z.B. Berlin ist die Hauptstadt von Deutschland" required></textarea>
+            </div>
+            <button type="submit" class="btn-add-memory">
+                <span class="send-text">Hinzufügen</span>
+                <span class="spinner"></span>
+            </button>
+        </form>
+    </div>
+
+    <div class="memories-stats" id="memories-stats">
+        {% if stats %}
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.total }}</span>
+            <span class="stat-label">Total Memories</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.opinions }}</span>
+            <span class="stat-label">Opinions</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ stats.facts }}</span>
+            <span class="stat-label">Facts</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value">{{ "%.0f"|format(stats.avg_confidence * 100) }}%</span>
+            <span class="stat-label">Avg Confidence</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="memory-list" id="memory-list">
+        {% include "partials/memory_list.html" %}
+    </div>
+</div>
+{% endblock %}

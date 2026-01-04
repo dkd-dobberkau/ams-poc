@@ -2,12 +2,15 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.api.routes import router
+from src.api.ui_routes import router as ui_router
 from src.config import get_settings
 from src.db.postgres import close_postgres, get_postgres
 from src.db.qdrant import close_qdrant, get_qdrant
@@ -82,6 +85,12 @@ def create_app() -> FastAPI:
 
     # Include routes
     app.include_router(router)
+    app.include_router(ui_router)
+
+    # Mount static files
+    static_path = Path(__file__).parent / "static"
+    if static_path.exists():
+        app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
     return app
 

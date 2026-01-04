@@ -127,15 +127,16 @@ class RetentionEngine:
         self,
         user_id: str,
         extracted: ExtractedMemory,
-    ) -> Memory | ConfidenceUpdate:
+    ) -> Memory | ConfidenceUpdate | None:
         """
-        Store an extracted memory.
+        Store an extracted memory with deduplication.
 
-        Opinions are processed through OpinionMemoryManager.
-        Other types are stored directly.
+        Opinions are processed through OpinionMemoryManager (has its own dedup).
+        Other types check for semantic similarity before storing.
+        Returns None if a duplicate was found and skipped.
         """
         if extracted.memory_type == MemoryType.OPINION:
-            # Use opinion manager for confidence tracking
+            # Use opinion manager for confidence tracking (has built-in dedup)
             opinion_manager = await self._get_opinion_manager()
             result = await opinion_manager.process_statement(
                 user_id=user_id,
@@ -143,12 +144,29 @@ class RetentionEngine:
             )
             return result
 
-        # Store non-opinion memories directly
+        # Store non-opinion memories with deduplication
         postgres = await self._get_postgres()
         qdrant = await self._get_qdrant()
         embedding_client = self._get_embedding()
 
         embedding = await embedding_client.embed(extracted.content)
+
+        # Check for duplicate memory (90% similarity threshold)
+        existing = await postgres.find_similar_memory(
+            user_id=user_id,
+            embedding=embedding,
+            memory_type=extracted.memory_type.value,
+            threshold=0.90,
+        )
+
+        if existing:
+            logger.info(
+                "Duplicate memory skipped",
+                memory_type=extracted.memory_type.value,
+                similarity=float(existing["similarity"]),
+                existing_content=existing["content"][:50],
+            )
+            return None
 
         # Facts always have confidence 1.0
         confidence = 1.0 if extracted.memory_type == MemoryType.FACT else extracted.confidence
@@ -171,6 +189,8 @@ class RetentionEngine:
         )
 
         record = await postgres.get_memory(memory_id)
+
+        logger.info("Memory stored", memory_id=str(memory_id), memory_type=extracted.memory_type.value)
 
         return Memory(
             id=record["id"],
@@ -202,7 +222,10 @@ class RetentionEngine:
         for memory in extracted:
             result = await self.store_memory(user_id, memory)
 
-            if isinstance(result, ConfidenceUpdate):
+            if result is None:
+                # Duplicate was skipped
+                continue
+            elif isinstance(result, ConfidenceUpdate):
                 confidence_updates.append(result)
             else:
                 stored_memories.append(memory)

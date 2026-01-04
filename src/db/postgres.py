@@ -232,11 +232,152 @@ class PostgresClient:
         """
         return await self.fetchrow(query, user_id, embedding, threshold)
 
+    async def find_similar_memory(
+        self,
+        user_id: str,
+        embedding: list[float],
+        memory_type: str,
+        threshold: float = 0.90,
+    ) -> asyncpg.Record | None:
+        """Find an existing memory of any type that's semantically similar."""
+        query = """
+            SELECT *, 1 - (content_embedding <=> $2) AS similarity
+            FROM memories
+            WHERE user_id = $1
+              AND memory_type = $3
+              AND 1 - (content_embedding <=> $2) >= $4
+            ORDER BY content_embedding <=> $2
+            LIMIT 1
+        """
+        return await self.fetchrow(query, user_id, embedding, memory_type, threshold)
+
     async def delete_memory(self, memory_id: uuid.UUID) -> bool:
         """Delete a memory by ID."""
         query = "DELETE FROM memories WHERE id = $1"
         result = await self.execute(query, memory_id)
         return result == "DELETE 1"
+
+    # Conversation methods
+    async def create_conversation(
+        self,
+        user_id: str,
+        title: str | None = None,
+    ) -> uuid.UUID:
+        """Create a new conversation."""
+        query = """
+            INSERT INTO conversations (user_id, title)
+            VALUES ($1, $2)
+            RETURNING id
+        """
+        return await self.fetchval(query, user_id, title)
+
+    async def get_conversations(
+        self,
+        user_id: str,
+        limit: int = 50,
+    ) -> list[asyncpg.Record]:
+        """Get all conversations for a user, ordered by most recent."""
+        query = """
+            SELECT c.id, c.user_id, c.title, c.created_at, c.updated_at,
+                   (SELECT content FROM chat_messages
+                    WHERE conversation_id = c.id
+                    ORDER BY created_at ASC LIMIT 1) as first_message
+            FROM conversations c
+            WHERE c.user_id = $1
+            ORDER BY c.updated_at DESC
+            LIMIT $2
+        """
+        return await self.fetch(query, user_id, limit)
+
+    async def get_conversation(
+        self,
+        conversation_id: uuid.UUID,
+    ) -> asyncpg.Record | None:
+        """Get a conversation by ID."""
+        query = "SELECT * FROM conversations WHERE id = $1"
+        return await self.fetchrow(query, conversation_id)
+
+    async def update_conversation_title(
+        self,
+        conversation_id: uuid.UUID,
+        title: str,
+    ) -> None:
+        """Update conversation title."""
+        query = "UPDATE conversations SET title = $2 WHERE id = $1"
+        await self.execute(query, conversation_id, title)
+
+    async def delete_conversation(
+        self,
+        conversation_id: uuid.UUID,
+    ) -> bool:
+        """Delete a conversation and all its messages."""
+        query = "DELETE FROM conversations WHERE id = $1"
+        result = await self.execute(query, conversation_id)
+        return result == "DELETE 1"
+
+    # Chat message methods
+    async def insert_chat_message(
+        self,
+        conversation_id: uuid.UUID,
+        user_id: str,
+        role: str,
+        content: str,
+        memories_used: list[dict] | None = None,
+    ) -> uuid.UUID:
+        """Insert a chat message."""
+        import json
+        query = """
+            INSERT INTO chat_messages (conversation_id, user_id, role, content, memories_used)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+        """
+        memories_json = json.dumps(memories_used or [])
+        result = await self.fetchval(
+            query, conversation_id, user_id, role, content, memories_json
+        )
+        # Update conversation's updated_at
+        await self.execute(
+            "UPDATE conversations SET updated_at = NOW() WHERE id = $1",
+            conversation_id
+        )
+        return result
+
+    async def get_conversation_messages(
+        self,
+        conversation_id: uuid.UUID,
+        limit: int = 100,
+    ) -> list[asyncpg.Record]:
+        """Get messages for a specific conversation."""
+        query = """
+            SELECT id, conversation_id, user_id, role, content, memories_used, created_at
+            FROM chat_messages
+            WHERE conversation_id = $1
+            ORDER BY created_at ASC
+            LIMIT $2
+        """
+        return await self.fetch(query, conversation_id, limit)
+
+    async def get_chat_history(
+        self,
+        user_id: str,
+        limit: int = 50,
+    ) -> list[asyncpg.Record]:
+        """Get chat history for a user (legacy, returns all messages)."""
+        query = """
+            SELECT id, user_id, role, content, memories_used, created_at
+            FROM chat_messages
+            WHERE user_id = $1
+            ORDER BY created_at ASC
+            LIMIT $2
+        """
+        return await self.fetch(query, user_id, limit)
+
+    async def clear_chat_history(self, user_id: str) -> int:
+        """Clear all chat history for a user (deletes conversations too)."""
+        # Delete conversations (cascade will delete messages)
+        query = "DELETE FROM conversations WHERE user_id = $1"
+        result = await self.execute(query, user_id)
+        return int(result.split()[1]) if result else 0
 
 
 # Global instance

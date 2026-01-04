@@ -1,0 +1,19 @@
+<div class="message {{ msg.role }}">
+    <div class="message-content">
+        {{ msg.content }}
+    </div>
+    {% if msg.memories_used %}
+    <div class="message-memories">
+        <small>Used {{ msg.memories_used|length }} memories</small>
+    </div>
+    {% endif %}
+    {% if msg.confidence_updates %}
+    <div class="message-updates">
+        {% for update in msg.confidence_updates %}
+        <span class="confidence-badge {{ update.evidence_type }}">
+            {{ update.evidence_type }}: {{ "%.0f"|format(update.old_confidence * 100) }}% → {{ "%.0f"|format(update.new_confidence * 100) }}%
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
