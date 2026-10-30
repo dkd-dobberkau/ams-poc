@@ -77,8 +77,7 @@ class HybridRecallEngine:
             response = await claude.complete(
                 system=QUERY_CLASSIFICATION_SYSTEM,
                 user_message=query,
-                max_tokens=10,
-                temperature=0.0,
+                max_tokens=2048,  # Thinking counts toward the limit
             )
 
             query_type_str = response.strip().lower()

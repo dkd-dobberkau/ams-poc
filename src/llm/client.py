@@ -20,6 +20,16 @@ class ClaudeClient:
         self._model = settings.claude_model
         self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
 
+    @staticmethod
+    def _extract_text(response: anthropic.types.Message) -> str:
+        """Join text blocks; thinking blocks can come first, refusals may be empty."""
+        if response.stop_reason == "refusal":
+            raise LLMAPIError("Claude refused the request")
+        text = "".join(block.text for block in response.content if block.type == "text")
+        if not text:
+            raise LLMAPIError("Unexpected response type from Claude")
+        return text
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -28,8 +38,7 @@ class ClaudeClient:
         self,
         system: str,
         user_message: str,
-        max_tokens: int = 1024,
-        temperature: float = 0.7,
+        max_tokens: int = 16000,
     ) -> str:
         """Generate a completion from Claude."""
         try:
@@ -38,12 +47,9 @@ class ClaudeClient:
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user_message}],
-                temperature=temperature,
+                output_config={"effort": "low"},
             )
-            content = response.content[0]
-            if content.type == "text":
-                return content.text
-            raise LLMAPIError("Unexpected response type from Claude")
+            return self._extract_text(response)
         except anthropic.APIError as e:
             logger.error("Claude API error", error=str(e))
             raise LLMAPIError(f"Claude API error: {e}") from e
@@ -56,7 +62,7 @@ class ClaudeClient:
         self,
         system: str,
         user_message: str,
-        max_tokens: int = 1024,
+        max_tokens: int = 16000,
     ) -> str:
         """Generate a JSON completion from Claude."""
         try:
@@ -65,12 +71,9 @@ class ClaudeClient:
                 max_tokens=max_tokens,
                 system=system,
                 messages=[{"role": "user", "content": user_message}],
-                temperature=0.0,  # Deterministic for JSON
+                output_config={"effort": "low"},
             )
-            content = response.content[0]
-            if content.type == "text":
-                return content.text
-            raise LLMAPIError("Unexpected response type from Claude")
+            return self._extract_text(response)
         except anthropic.APIError as e:
             logger.error("Claude API error", error=str(e))
             raise LLMAPIError(f"Claude API error: {e}") from e

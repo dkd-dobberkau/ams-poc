@@ -120,7 +120,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         response_text = await claude.complete(
             system=system_prompt,
             user_message=request.message,
-            max_tokens=2048,
+            max_tokens=16000,
         )
 
         # Store new memories from conversation

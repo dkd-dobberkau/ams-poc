@@ -93,7 +93,7 @@ class RetentionEngine:
             response = await claude.complete_json(
                 system=MEMORY_EXTRACTION_SYSTEM,
                 user_message=prompt,
-                max_tokens=2048,
+                max_tokens=16000,
             )
 
             # Parse JSON response
