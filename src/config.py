@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
 
     # LLM Settings
-    claude_model: str = "claude-sonnet-4-20250514"
+    claude_model: str = "claude-sonnet-5-5"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
 
